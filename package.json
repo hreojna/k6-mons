@@ -1,0 +1,13 @@
+{
+    "scripts": {
+        "prettier": "prettier --write .",
+        "build": "tsc"
+    },
+    "devDependencies": {
+        "@types/k6": "^1.2.0",
+        "prettier": "^3.7.4"
+    },
+    "dependencies": {
+        "typescript": "^5.9.3"
+    }
+}
