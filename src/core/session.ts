@@ -3,7 +3,7 @@ import http, { Params, Response } from 'k6/http'
 
 import { HttpOption, Request } from '../types.ts'
 import { mergeParams } from './helpers.ts'
-import { RequestExecutor } from './request.ts'
+import { BatchExecutor, RequestExecutor } from './request.ts'
 
 export class HttpSession {
   option: HttpOption
@@ -38,6 +38,10 @@ export class HttpSession {
       request.body,
       mergeParams(this.params, request.params)
     )
+  }
+
+  executorBatch(requests: Request[]) {
+    return new BatchExecutor(requests, this)
   }
 
   sendBatch(requests: Request[]): Response[] {
@@ -75,7 +79,7 @@ export class HttpSession {
           )
         else
           fail(
-            `Request failed after ${attempt - 1} retries: ${response.request.method} ${response.request.url}`
+            `Request failed after ${attempt} retries: ${response.request.method} ${response.request.url}`
           )
       return result
     }

@@ -78,7 +78,7 @@ export class RequestBuilder<
       this.request.params = mergeParams(this.request.params, params)
     return this
   }
-  
+
   addHeader(name: string, value: string) {
     if (this.request.params?.headers) this.request.params.headers[name] = value
   }
@@ -96,7 +96,7 @@ export class RequestBuilder<
 export class RequestExecutor {
   private _response?: Response
   private _checks?: Checkers<Response>
-  private _passed: boolean = true
+  private _passed: boolean = false
   private _attempts: number = 0
   private _retries: number = 0
   private _interval: number = 0
@@ -104,22 +104,24 @@ export class RequestExecutor {
   constructor(
     private _request: Request,
     private _session: HttpSession
-  ) {}
+  ) {
+    this._checks = this._request.checks
+  }
 
   run({ retries, interval }: RetryOptions = { retries: 0, interval: 0 }) {
     this._retries = retries
     this._interval = interval ?? 0
     this._response = this._session.send(this._request)
-    this._attempts = 1
+    this._attempts = 0
     return this
   }
 
   check(
-    data?: Checkers<Response>,
+    checks?: Checkers<Response>,
     failError: boolean = true,
     logError: boolean = true
   ) {
-    this._checks = { ...data, ...this._request.checks }
+    this._checks = { ...checks, ...this._checks }
 
     if (!this._response) {
       throw new Error(
@@ -133,7 +135,7 @@ export class RequestExecutor {
     }
 
     let hasRetries = this._attempts <= this._retries
-    this.runCheck(hasRetries, failError, logError)
+    this.runCheck(this._attempts, hasRetries, failError, logError)
 
     while (!this._passed && this._attempts <= this._retries) {
       if (this._interval > 0) sleep(this._interval / 1000)
@@ -142,12 +144,13 @@ export class RequestExecutor {
       this._attempts++
 
       hasRetries = this._attempts <= this._retries
-      this.runCheck(hasRetries, failError, logError)
+      this.runCheck(this._attempts, hasRetries, failError, logError)
     }
     return this
   }
 
   runCheck(
+    attempts: number,
     hasRetries: boolean,
     failError: boolean = true,
     logError: boolean = true
@@ -157,21 +160,22 @@ export class RequestExecutor {
       this._checks!,
       hasRetries ? false : failError,
       hasRetries ? logError : true,
-      this._attempts
+      attempts
     )
   }
 
   get response() {
     return this._response!
   }
+
   set response(res: Response) {
     this._response = res
-    this._attempts++
   }
 
   get request() {
     return this._request
   }
+
   set request(req: Request) {
     this._request = req
   }
@@ -179,6 +183,7 @@ export class RequestExecutor {
   public isPassed() {
     return this._passed
   }
+
 }
 
 export class BatchExecutor {
@@ -209,7 +214,7 @@ export class BatchExecutor {
   check(failError: boolean = true, logError: boolean = true) {
     this.runCheck(failError, logError)
 
-    while (this._hasFailedRequests() && this._attempts <= this._retries) {
+    while (this._hasFailedRequests() && this._attempts < this._retries) {
       if (this._interval > 0) sleep(this._interval / 1000)
       this._attempts++
 
@@ -217,7 +222,6 @@ export class BatchExecutor {
       const responses = this._session.sendBatch(
         failedExecutors.map((e) => e.request)
       )
-
       failedExecutors.forEach((exec, i) => (exec.response = responses[i]))
 
       this.runCheck(failError, logError)
@@ -227,9 +231,9 @@ export class BatchExecutor {
   }
 
   runCheck(failError: boolean, logError: boolean) {
-    const hasRetries = this._attempts <= this._retries
+    const hasRetries = this._attempts < this._retries
     this._executors.forEach((exec) => {
-      if (!exec.isPassed()) exec.runCheck(hasRetries, failError, logError)
+      if (!exec.isPassed()) exec.runCheck(this._attempts, hasRetries, failError, logError)
     })
   }
 
