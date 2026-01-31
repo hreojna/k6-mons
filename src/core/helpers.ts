@@ -31,7 +31,10 @@ export function serializeObject(obj: any): string[] {
   for (const key in obj) {
     const value = obj[key]
     if (value !== null && typeof value === 'object') {
-      parts.push(...serializeObject(value))
+      if (Array.isArray(value))
+        parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+      else
+        parts.push(...serializeObject(value))
     } else if (value !== undefined) {
       parts.push(
         `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`
