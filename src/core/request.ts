@@ -96,21 +96,20 @@ export class RequestBuilder<
 export class RequestExecutor {
   private _response?: Response
   private _checks?: Checkers<Response>
-  private _passed: boolean = false
+  private _passed: boolean | undefined
   private _attempts: number = 0
-  private _retries: number = 0
-  private _interval: number = 0
+  private _retry: RetryOptions
 
   constructor(
     private _request: Request,
     private _session: HttpSession
   ) {
     this._checks = this._request.checks
+    this._retry = { retries: 0, interval: 0, ..._session.option.retry }
   }
 
-  run({ retries, interval }: RetryOptions = { retries: 0, interval: 0 }) {
-    this._retries = retries
-    this._interval = interval ?? 0
+  run(retry?: RetryOptions) {
+    this._retry = { ...this._retry, ...retry }
     this._response = this._session.send(this._request)
     this._attempts = 0
     return this
@@ -134,16 +133,16 @@ export class RequestExecutor {
       )
     }
 
-    let hasRetries = this._attempts <= this._retries
+    let hasRetries = this._attempts < this._retry.retries
     this.runCheck(this._attempts, hasRetries, failError, logError)
 
-    while (!this._passed && this._attempts <= this._retries) {
-      if (this._interval > 0) sleep(this._interval / 1000)
+    while (!this._passed && this._attempts < this._retry.retries) {
+      if (this._retry.interval! > 0) sleep(this._retry.interval! / 1000)
 
       this._response = this._session.send(this._request)
       this._attempts++
 
-      hasRetries = this._attempts <= this._retries
+      hasRetries = this._attempts <= this._retry.retries
       this.runCheck(this._attempts, hasRetries, failError, logError)
     }
     return this
